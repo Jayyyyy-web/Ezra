@@ -2,6 +2,10 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Grid, Html, OrbitControls } from '@react-three/drei'
+import { Bloom, EffectComposer, ToneMapping, Vignette } from '@react-three/postprocessing'
+import { ToneMappingMode } from 'postprocessing'
+import Backdrop from './Backdrop.jsx'
+import { INSIDE } from './inside/index.js'
 import * as THREE from 'three'
 import { UNITS, field } from '../model/units.js'
 import { C, M } from './materials.js'
@@ -50,7 +54,8 @@ function metaFor(id, r) {
 
 const rack = (x1, x2, z, y, a, b) => [a ?? [x1, 2, z], [x1, y, z], [x2, y, z], b ?? [x2, 2, z]]
 
-function Selectable({ unit, meta, name, selected, hovered, onSelect, onHover, showLabel, children }) {
+function Selectable({ unit, meta, name, selected, hovered, onSelect, onHover, onEnter, showLabel, children }) {
+  const inside = Boolean(INSIDE[unit.id])
   const ring = useRef()
   useFrame((state) => {
     if (!ring.current) return
@@ -64,6 +69,10 @@ function Selectable({ unit, meta, name, selected, hovered, onSelect, onHover, sh
         onClick={(e) => {
           e.stopPropagation()
           onSelect(unit.id)
+        }}
+        onDoubleClick={(e) => {
+          e.stopPropagation()
+          if (inside) onEnter(unit.id)
         }}
         onPointerOver={(e) => {
           e.stopPropagation()
@@ -82,15 +91,19 @@ function Selectable({ unit, meta, name, selected, hovered, onSelect, onHover, sh
         <meshBasicMaterial color={C.select} transparent opacity={0.4} toneMapped={false} />
       </mesh>
       {showLabel && (
-        <Html position={[meta.dx ?? 0, meta.h, 0]} center zIndexRange={[20, 0]}>
+        <Html position={[meta.dx ?? 0, meta.h, 0]} center zIndexRange={[8, 0]}>
           <button
             type="button"
-            className={`tag${selected ? ' is-on' : ''}`}
+            className={`tag${selected ? ' is-on' : ''}${inside ? ' has-inside' : ''}`}
             onPointerDown={(e) => e.stopPropagation()}
             onPointerUp={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation()
               onSelect(unit.id)
+            }}
+            onDoubleClick={(e) => {
+              e.stopPropagation()
+              if (inside) onEnter(unit.id)
             }}
             onPointerEnter={() => onHover(unit.id)}
             onPointerLeave={() => onHover(null)}
@@ -122,17 +135,23 @@ function Focus({ target, controls }) {
   return null
 }
 
-// Portrait screens see less of the wide site, so pull the camera back.
-function FitToScreen() {
+// Frame the site in the part of the screen the floating panels leave open:
+// pull the camera back when that gap is narrow, and shift the picture so the
+// site sits in the middle of the gap rather than behind a panel.
+function FitToScreen({ insets }) {
   const { camera, size } = useThree()
-  const aspect = size.width / size.height
-  const portrait = aspect < 1.3
+  const left = insets?.left ?? 0
+  const right = insets?.right ?? 0
   useEffect(() => {
-    const k = portrait ? Math.min(2.1, 1.3 / aspect) : 1
+    const visible = Math.max(200, size.width - left - right)
+    const aspect = visible / size.height
+    const k = aspect < 1.45 ? Math.min(2.1, 1.45 / aspect) : 1
     camera.position.set(8 * k, 46 * k, 60 * k)
+    const shift = (left - right) / 2
+    if (shift) camera.setViewOffset(size.width, size.height, -shift, 0, size.width, size.height)
+    else camera.clearViewOffset()
     camera.updateProjectionMatrix()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [camera, portrait])
+  }, [camera, size.width, size.height, left, right])
   return null
 }
 
@@ -140,7 +159,7 @@ function Ground() {
   return (
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[260, 260]} />
+        <planeGeometry args={[700, 700]} />
         <meshStandardMaterial color={C.ground} roughness={1} />
       </mesh>
       <Grid
@@ -148,11 +167,11 @@ function Ground() {
         args={[260, 260]}
         cellSize={2}
         cellThickness={0.5}
-        cellColor="#27313a"
+        cellColor="#1a232b"
         sectionSize={10}
         sectionThickness={1}
-        sectionColor="#33404b"
-        fadeDistance={140}
+        sectionColor="#24313c"
+        fadeDistance={170}
         infiniteGrid={false}
       />
       {/* roads */}
@@ -208,7 +227,7 @@ function Flows({ r, running }) {
   ))
 }
 
-export default function PlantScene({ result, selected, hovered, onSelect, onHover, showLabels, running }) {
+export default function PlantScene({ result, selected, hovered, onSelect, onHover, onEnter, showLabels, running, glow = true, insets }) {
   const s = result.settings
   const controls = useRef()
   const target = selected ? UNITS.find((u) => u.id === selected)?.pos : null
@@ -234,18 +253,23 @@ export default function PlantScene({ result, selected, hovered, onSelect, onHove
     <Canvas
       shadows
       dpr={[1, 2]}
-      camera={{ position: [8, 46, 60], fov: 38, near: 0.5, far: 500 }}
+      camera={{ position: [8, 46, 60], fov: 38, near: 0.5, far: 1000 }}
       onPointerMissed={() => onSelect(null)}
       gl={{ antialias: true }}
     >
-      <color attach="background" args={['#0d1216']} />
-      <fog attach="fog" args={['#0d1216', 90, 190]} />
-      <hemisphereLight args={['#c4d2de', '#262e35', 1.6]} />
-      <FitToScreen />
+      <color attach="background" args={['#03050a']} />
+      <fog attach="fog" args={['#0a1119', 110, 290]} />
+      <hemisphereLight args={['#9fb4cc', '#161c22', 1.25]} />
+      <FitToScreen insets={insets} />
+      <Backdrop />
+      {/* warm site floodlights */}
+      {[[-20, 9, -2], [8, 10, -12], [8, 10, 12], [28, 9, 0]].map((p, i) => (
+        <pointLight key={i} position={p} intensity={60} distance={34} decay={1.6} color="#ffcf9a" />
+      ))}
       <directionalLight
-        position={[30, 45, 22]}
-        intensity={2.4}
-        color="#fff0da"
+        position={[-40, 60, -30]}
+        intensity={1.5}
+        color="#cfdcff"
         castShadow
         shadow-mapSize={[2048, 2048]}
         shadow-camera-left={-60}
@@ -265,6 +289,7 @@ export default function PlantScene({ result, selected, hovered, onSelect, onHove
           hovered={hovered === u.id}
           onSelect={onSelect}
           onHover={onHover}
+          onEnter={onEnter}
           showLabel={showLabels}
         >
           {body(u.id)}
@@ -277,10 +302,15 @@ export default function PlantScene({ result, selected, hovered, onSelect, onHove
         target={[-4, 0, 3]}
         maxPolarAngle={Math.PI / 2.15}
         minDistance={12}
-        maxDistance={180}
+        maxDistance={200}
         enableDamping
       />
       <Focus target={target} controls={controls} />
+      <EffectComposer multisampling={0} enabled={glow}>
+        <Bloom mipmapBlur intensity={0.85} luminanceThreshold={0.95} luminanceSmoothing={0.2} radius={0.7} />
+        <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />
+        <Vignette offset={0.3} darkness={0.55} />
+      </EffectComposer>
     </Canvas>
   )
 }

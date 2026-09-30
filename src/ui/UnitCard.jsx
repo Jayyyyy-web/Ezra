@@ -1,4 +1,5 @@
 import { UNIT_BY_ID, field } from '../model/units.js'
+import { INSIDE } from '../scene/inside/index.js'
 import { compact, num } from './format.js'
 
 function val({ v, u }) {
@@ -9,7 +10,7 @@ function val({ v, u }) {
   )
 }
 
-export default function UnitCard({ id, r, onClose }) {
+export default function UnitCard({ id, r, onClose, onInside }) {
   const u = UNIT_BY_ID[id]
   if (!u) return null
   const f = u.flows(r)
@@ -53,6 +54,12 @@ export default function UnitCard({ id, r, onClose }) {
           </ul>
         </div>
       </div>
+      {onInside && (
+        <button type="button" className="btn-inside" onClick={onInside}>
+          <span>Look inside the {INSIDE[id].title.toLowerCase()}</span>
+          <small>{INSIDE[id].hint}</small>
+        </button>
+      )}
     </aside>
   )
 }

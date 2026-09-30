@@ -31,7 +31,8 @@ export const CELLS = {
     label: 'Membrane + oxygen cathode',
     short: 'ODC membrane',
     v0: 1.55, // V at zero current, roughly
-    k: 0.11, // V per kA/m²
+    k: 0.11, // V per kA/m², mostly membrane and electrolyte resistance
+    erev: 1.23, // reversible (thermodynamic) cell voltage
     ce: 0.97,
     conc: 0.32, // NaOH strength leaving the cell
     j: [2, 6, 4], // min, max, default current density kA/m²
@@ -46,6 +47,7 @@ export const CELLS = {
     short: 'Membrane',
     v0: 2.3,
     k: 0.105,
+    erev: 2.19,
     ce: 0.965,
     conc: 0.32,
     j: [3, 8, 6],
@@ -60,6 +62,7 @@ export const CELLS = {
     short: 'Diaphragm',
     v0: 2.75,
     k: 0.28,
+    erev: 2.19,
     ce: 0.95,
     conc: 0.11,
     j: [1.5, 3, 2.4],
@@ -73,8 +76,9 @@ export const CELLS = {
   mercury: {
     label: 'Mercury',
     short: 'Mercury',
-    v0: 3.05,
-    k: 0.095,
+    v0: 3.15,
+    k: 0.085,
+    erev: 3.12,
     ce: 0.965,
     conc: 0.5,
     j: [6, 14, 10],
@@ -138,6 +142,17 @@ export const PRESET_KEYS = Object.keys(PRESETS.efficient)
 export function cellVoltage(cell, j) {
   const c = CELLS[cell]
   return c.v0 + c.k * j
+}
+
+// Where the cell voltage goes: the thermodynamic minimum, the extra push the
+// electrodes need to react (overpotential), and resistance losses that grow with current.
+export function voltageBreakdown(cell, j) {
+  const c = CELLS[cell]
+  return [
+    { id: 'erev', label: 'Thermodynamic minimum', v: c.erev },
+    { id: 'over', label: 'Electrode overpotential', v: c.v0 - c.erev },
+    { id: 'ohm', label: 'Resistance (membrane, liquid, bubbles)', v: c.k * j },
+  ]
 }
 
 // ---------- the model ----------

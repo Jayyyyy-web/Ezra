@@ -56,6 +56,16 @@ The 3D site responds too. The number of electrolysers grows or shrinks with capa
 
 Click any unit in the 3D view to see its conditions and live in/out flows.
 
+## Look inside
+
+Double-click a unit marked with a blue dot, or use **Look inside** on its card, to open a cutaway:
+
+- **Electrolysis cell:** watch sodium ions cross the membrane, chloride ions give up electrons at the anode, and chlorine and hydrogen bubble off. The layout changes for each cell type, including a flowing mercury floor for legacy cells. A voltage bar splits the cell voltage into the thermodynamic minimum, electrode overpotential and resistance losses, and dragging the current slider shows the bubbles and losses grow.
+- **Drying tower:** wet chlorine rises through packing while sulfuric acid trickles down and soaks up the water.
+- **Evaporator:** caustic boils in a tube bundle, heated by steam or by a vapour compressor.
+
+Click any labelled part in a cutaway to learn what it does.
+
 ## Model notes
 
 Material flows come from stoichiometry. Cell voltage is modelled as V = V₀ + k·j for each technology, using typical published values. Prices, auxiliary energy and build costs are indicative ranges. The model lives in `src/model/plant.js` and is meant for comparing options, not for investment decisions.

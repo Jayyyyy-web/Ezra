@@ -1,8 +1,8 @@
 // Colour palette for the 3D site (no three.js import, so the UI can use it cheaply).
 export const C = {
-  ground: '#222a30',
-  pad: '#2a3238',
-  road: '#161a1e',
+  ground: '#12181d',
+  pad: '#1f272e',
+  road: '#0b0e11',
   steel: '#a9b2ba',
   steelDark: '#58626b',
   frame: '#3a434b',
