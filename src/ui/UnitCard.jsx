@@ -1,4 +1,4 @@
-import { UNIT_BY_ID } from '../model/units.js'
+import { UNIT_BY_ID, field } from '../model/units.js'
 import { compact, num } from './format.js'
 
 function val({ v, u }) {
@@ -13,20 +13,20 @@ export default function UnitCard({ id, r, onClose }) {
   const u = UNIT_BY_ID[id]
   if (!u) return null
   const f = u.flows(r)
-  const cond = typeof u.conditions === 'function' ? u.conditions(r.settings) : u.conditions
+  const name = field(u.name, r)
   return (
-    <aside className="unit-card" aria-label={u.name}>
+    <aside className="unit-card" aria-label={name}>
       <header>
         <div>
-          <span className="eyebrow">{u.lane}</span>
-          <h2>{u.name}</h2>
+          <span className="eyebrow">{field(u.lane, r)}</span>
+          <h2>{name}</h2>
         </div>
         <button type="button" className="close" onClick={onClose} aria-label="Close unit details">
           ×
         </button>
       </header>
-      <p>{u.what}</p>
-      <p className="cond mono">{cond}</p>
+      <p>{field(u.what, r)}</p>
+      <p className="cond mono">{field(u.conditions, r)}</p>
       <div className="flows">
         {f.in.length > 0 && (
           <div>

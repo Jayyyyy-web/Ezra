@@ -1,11 +1,11 @@
-// Geometry for each process unit. Each is drawn around its own origin;
-// PlantScene places it at the unit's position.
-import { useRef } from 'react'
+// Geometry for each unit of the chlorine plant. Each is drawn around its own
+// origin; PlantScene places it at the unit's position.
+import { useEffect, useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { C, M } from './materials.js'
+import * as THREE from 'three'
+import { C, M, mat } from './materials.js'
 
-const TAU = Math.PI * 2
-
+// ---------- building blocks ----------
 function Pad({ w, d }) {
   return (
     <mesh position={[0, 0.03, 0]} receiveShadow material={M.pad()}>
@@ -14,12 +14,17 @@ function Pad({ w, d }) {
   )
 }
 
-function Tank({ r = 1, h = 3, color, y = 0, cone = false, ...p }) {
+function Tank({ r = 1, h = 3, color, band, y = 0, cone = false, ...p }) {
   return (
     <group {...p}>
       <mesh position={[0, y + h / 2, 0]} castShadow receiveShadow material={color ? M.paint(color) : M.steel()}>
         <cylinderGeometry args={[r, r, h, 28]} />
       </mesh>
+      {band && (
+        <mesh position={[0, y + h * 0.72, 0]} material={M.paint(band)}>
+          <cylinderGeometry args={[r * 1.01, r * 1.01, h * 0.12, 28]} />
+        </mesh>
+      )}
       <mesh position={[0, y + h + 0.18, 0]} castShadow material={M.steelDark()}>
         <cylinderGeometry args={[r * 0.35, r, 0.36, 28]} />
       </mesh>
@@ -33,10 +38,8 @@ function Tank({ r = 1, h = 3, color, y = 0, cone = false, ...p }) {
 }
 
 function Legs({ w, d, h }) {
-  const xs = [-w / 2, w / 2]
-  const zs = [-d / 2, d / 2]
-  return xs.flatMap((x) =>
-    zs.map((z) => (
+  return [-w / 2, w / 2].flatMap((x) =>
+    [-d / 2, d / 2].map((z) => (
       <mesh key={`${x}${z}`} position={[x, h / 2, z]} castShadow material={M.frame()}>
         <boxGeometry args={[0.18, h, 0.18]} />
       </mesh>
@@ -50,10 +53,10 @@ function Building({ w, d, h, ...p }) {
       <mesh position={[0, h / 2, 0]} castShadow receiveShadow material={M.wall()}>
         <boxGeometry args={[w, h, d]} />
       </mesh>
-      <mesh position={[0, h + 0.5, 0]} rotation={[0, 0, 0]} castShadow material={M.roof()}>
-        <boxGeometry args={[w + 0.3, 1, d + 0.3]} />
+      <mesh position={[0, h + 0.25, 0]} castShadow material={M.roof()}>
+        <boxGeometry args={[w + 0.3, 0.5, d + 0.3]} />
       </mesh>
-      {Array.from({ length: Math.floor(w / 2.2) }).map((_, i) => (
+      {Array.from({ length: Math.max(1, Math.floor(w / 2.2)) }).map((_, i) => (
         <mesh key={i} position={[-w / 2 + 1.2 + i * 2.2, h * 0.62, d / 2 + 0.01]} material={M.glow('#9fc6ff', 0.35)}>
           <planeGeometry args={[1.2, 0.5]} />
         </mesh>
@@ -62,318 +65,437 @@ function Building({ w, d, h, ...p }) {
   )
 }
 
-// ---------- units ----------
-
-export function OreYard() {
-  return (
-    <group>
-      <Pad w={9} d={8} />
-      {[
-        [-2.2, -1.6, 2.2],
-        [1.8, -1.2, 1.8],
-        [-0.8, 2, 1.6],
-      ].map(([x, z, h], i) => (
-        <mesh key={i} position={[x, h / 2, z]} castShadow receiveShadow material={M.paint(C.ore)}>
-          <coneGeometry args={[h * 1.25, h, 24]} />
-        </mesh>
-      ))}
-      <mesh position={[3.4, 0.9, 0]} rotation={[0, 0, -0.18]} castShadow material={M.frame()}>
-        <boxGeometry args={[4, 0.3, 0.9]} />
-      </mesh>
-    </group>
-  )
-}
-
-export function Kiln({ settings, running }) {
-  const drum = useRef()
-  useFrame((_, dt) => {
-    if (drum.current && running) drum.current.rotation.x += dt * 0.6
-  })
-  return (
-    <group>
-      <Pad w={15} d={6} />
-      <group position={[0, 1.9, 0]} rotation={[0, 0, 0.04]}>
-        <group ref={drum}>
-          <mesh rotation={[0, 0, Math.PI / 2]} castShadow material={M.steel()}>
-            <cylinderGeometry args={[1.05, 1.05, 12, 32]} />
-          </mesh>
-          {[-4, 0, 4].map((x) => (
-            <mesh key={x} position={[x, 0, 0]} rotation={[0, Math.PI / 2, 0]} castShadow material={M.steelDark()}>
-              <torusGeometry args={[1.15, 0.12, 10, 32]} />
-            </mesh>
-          ))}
-        </group>
-        {/* hot end glow */}
-        <mesh position={[6.05, 0, 0]} rotation={[0, 0, Math.PI / 2]} material={M.glow(C.heat, 2.4)}>
-          <cylinderGeometry args={[0.8, 0.8, 0.1, 24]} />
-        </mesh>
-      </group>
-      {[-4, 0, 4].map((x) => (
-        <mesh key={x} position={[x, 0.45, 0]} castShadow material={M.frame()}>
-          <boxGeometry args={[0.6, 0.9, 2.4]} />
-        </mesh>
-      ))}
-      {/* firing hood */}
-      <mesh position={[6.8, 1.9, 0]} castShadow material={M.wall()}>
-        <boxGeometry args={[1.4, 3, 2.6]} />
-      </mesh>
-      {!settings.electricKiln && (
-        <group position={[6.8, 0, -2]}>
-          <mesh position={[0, 4.5, 0]} castShadow material={M.steelDark()}>
-            <cylinderGeometry args={[0.35, 0.45, 9, 16]} />
-          </mesh>
-          <mesh position={[0, 9.1, 0]} material={M.glow('#c24b2d', 0.8)}>
-            <cylinderGeometry args={[0.37, 0.37, 0.25, 16]} />
-          </mesh>
-        </group>
-      )}
-      {settings.electricKiln && (
-        <mesh position={[6.8, 3.6, 0]} material={M.glow(C.power, 1.2)}>
-          <boxGeometry args={[1.5, 0.12, 2.7]} />
-        </mesh>
-      )}
-    </group>
-  )
-}
-
-export function Leach() {
-  return (
-    <group>
-      <Pad w={9} d={6} />
-      {[-2.8, 0, 2.8].map((x) => (
-        <Tank key={x} position={[x, 0, -0.8]} r={1.1} h={3} />
-      ))}
-      <group position={[0, 0, 2]}>
-        <Legs w={6} d={1.2} h={1.2} />
-        <mesh position={[0, 1.3, 0]} castShadow material={M.steelDark()}>
-          <boxGeometry args={[6.4, 0.25, 1.4]} />
-        </mesh>
-      </group>
-    </group>
-  )
-}
-
-export function Purify() {
-  return (
-    <group>
-      <Pad w={6} d={6} />
-      {[-1.5, -0.5, 0.5, 1.5].map((x, i) => (
-        <mesh key={x} position={[x, 2.4, -0.6]} castShadow material={i % 2 ? M.steel() : M.paint('#dfe6ea')}>
-          <cylinderGeometry args={[0.38, 0.38, 4.8, 18]} />
-        </mesh>
-      ))}
-      <Tank position={[0, 0, 1.8]} r={0.9} h={1.6} color="#dfe6ea" />
-    </group>
-  )
-}
-
-export function Crystallizer({ settings }) {
-  return (
-    <group>
-      <Pad w={6} d={6} />
-      <Tank position={[-0.6, 1.5, 0]} r={1.3} h={5.5} cone />
-      <group position={[-0.6, 0, 0]}>
-        <Legs w={1.8} d={1.8} h={1.5} />
-      </group>
-      {settings.heatRecovery ? (
-        <mesh position={[1.9, 0.8, 1]} castShadow material={M.paint('#3c7ad6')}>
-          <boxGeometry args={[1.5, 1.6, 1.8]} />
-        </mesh>
-      ) : (
-        <mesh position={[1.9, 1.2, 1]} rotation={[0, 0, Math.PI / 2]} castShadow material={M.steelDark()}>
-          <cylinderGeometry args={[0.6, 0.6, 2, 16]} />
-        </mesh>
-      )}
-    </group>
-  )
-}
-
-export function Salts() {
-  const tanks = [
-    [-2.6, C.nickel],
-    [0, C.manganese],
-    [2.6, C.cobalt],
-  ]
-  return (
-    <group>
-      <Pad w={9} d={6} />
-      {tanks.map(([x, c]) => (
-        <Tank key={x} position={[x, 0, 0]} r={1} h={2.6} color={c} />
-      ))}
-    </group>
-  )
-}
-
-function Reactor({ running, ...p }) {
-  const shaft = useRef()
-  useFrame((_, dt) => {
-    if (shaft.current && running) shaft.current.rotation.y += dt * 4
-  })
+// Horizontal pressure vessel with rounded ends
+function Bullet({ r = 0.9, len = 5, color, band, ...p }) {
+  const m = color ? M.paint(color) : M.steel()
   return (
     <group {...p}>
-      <Tank r={0.95} h={3.2} />
-      <mesh position={[0, 3.9, 0]} castShadow material={M.paint('#3c7ad6')}>
-        <boxGeometry args={[0.7, 0.7, 0.7]} />
+      <mesh rotation={[0, 0, Math.PI / 2]} castShadow material={m}>
+        <cylinderGeometry args={[r, r, len, 24]} />
       </mesh>
-      <group ref={shaft} position={[0, 4.35, 0]}>
-        <mesh material={M.steelDark()}>
-          <boxGeometry args={[1, 0.08, 0.14]} />
-        </mesh>
-      </group>
-    </group>
-  )
-}
-
-export function PrecursorReactors({ trains, running }) {
-  const n = Math.max(1, trains)
-  const spacing = 2.4
-  return (
-    <group>
-      <Pad w={Math.max(6, n * spacing + 2)} d={6} />
-      {Array.from({ length: n }).map((_, i) => (
-        <group key={i} position={[(i - (n - 1) / 2) * spacing, 0, 0]}>
-          <Reactor running={running} position={[0, 0, -0.9]} />
-          <Reactor running={running} position={[0, 0, 1.4]} />
-        </group>
-      ))}
-    </group>
-  )
-}
-
-export function FilterDryer() {
-  return (
-    <group>
-      <Pad w={7} d={6} />
-      <Building w={4} d={3.4} h={3} position={[-1, 0, -0.6]} />
-      <mesh position={[1.9, 1.2, 1.8]} rotation={[0, 0, Math.PI / 2]} castShadow material={M.steel()}>
-        <cylinderGeometry args={[0.75, 0.75, 3.2, 20]} />
-      </mesh>
-    </group>
-  )
-}
-
-export function CathodeKiln({ lines, running }) {
-  const n = Math.max(1, lines)
-  return (
-    <group>
-      <Pad w={17} d={Math.max(6, n * 3.4 + 2)} />
-      {Array.from({ length: n }).map((_, i) => (
-        <KilnLine key={i} running={running} z={(i - (n - 1) / 2) * 3.4} />
-      ))}
-    </group>
-  )
-}
-
-function KilnLine({ z, running }) {
-  const saggers = useRef()
-  const count = 12
-  useFrame((state) => {
-    if (!saggers.current) return
-    const t = running ? state.clock.elapsedTime : 0
-    saggers.current.children.forEach((m, i) => {
-      const u = ((t * 0.06 + i / count) % 1) * 16 - 8
-      m.position.x = u
-      m.visible = u < -6.8 || u > 6.8
-    })
-  })
-  return (
-    <group position={[0, 0, z]}>
-      <mesh position={[0, 1.3, 0]} castShadow receiveShadow material={M.wall()}>
-        <boxGeometry args={[13.6, 2, 2.2]} />
-      </mesh>
-      {/* glow slits along the hot zone */}
       {[-1, 1].map((s) => (
-        <mesh key={s} position={[0.5, 1.2, s * 1.105]} rotation={[0, s > 0 ? 0 : Math.PI, 0]} material={M.glow(C.heat, 2.2)}>
-          <planeGeometry args={[9, 0.22]} />
+        <mesh key={s} position={[(s * len) / 2, 0, 0]} scale={[0.5, 1, 1]} castShadow material={m}>
+          <sphereGeometry args={[r, 20, 14]} />
         </mesh>
       ))}
-      <mesh position={[0, 0.55, 0]} material={M.frame()}>
-        <boxGeometry args={[16, 0.2, 1.1]} />
+      {band && (
+        <mesh rotation={[0, 0, Math.PI / 2]} material={M.paint(band)}>
+          <cylinderGeometry args={[r * 1.02, r * 1.02, 0.5, 24]} />
+        </mesh>
+      )}
+    </group>
+  )
+}
+
+function Stack({ h = 10, r = 0.4, glow, ...p }) {
+  return (
+    <group {...p}>
+      <mesh position={[0, h / 2, 0]} castShadow material={M.steelDark()}>
+        <cylinderGeometry args={[r * 0.8, r, h, 16]} />
       </mesh>
-      <group ref={saggers}>
-        {Array.from({ length: count }).map((_, i) => (
-          <mesh key={i} position={[0, 0.85, 0]} castShadow material={M.paint('#b9a58f')}>
-            <boxGeometry args={[0.7, 0.4, 0.7]} />
-          </mesh>
-        ))}
-      </group>
-      {/* oxygen feed */}
-      <mesh position={[-2, 2.6, 0]} material={M.paint('#9fd6ff')}>
-        <cylinderGeometry args={[0.12, 0.12, 0.6, 10]} />
+      <mesh position={[0, h + 0.1, 0]} material={glow ? M.glow(glow, 1.2) : M.frame()}>
+        <cylinderGeometry args={[r * 0.85, r * 0.85, 0.2, 16]} />
       </mesh>
     </group>
   )
 }
 
-export function Finishing({ running }) {
-  const truck = useRef()
-  useFrame((state) => {
-    if (!truck.current) return
-    const t = running ? state.clock.elapsedTime : 0
-    truck.current.position.z = 6 + ((t * 1.8) % 26)
-  })
+// ---------- units ----------
+
+export function SaltDome() {
   return (
     <group>
-      <Pad w={9} d={8} />
-      <Building w={6.5} d={5} h={3.4} position={[0, 0, -0.5]} />
-      {[-2.4, -0.8].map((x) => (
-        <Tank key={x} position={[x, 0, 3.2]} r={0.6} h={3} />
-      ))}
-      <group ref={truck} position={[2.2, 0, 6]}>
-        <mesh position={[0, 0.9, 0]} castShadow material={M.paint('#e8ecef')}>
-          <boxGeometry args={[1.5, 1.4, 3.4]} />
-        </mesh>
-        <mesh position={[0, 0.75, -2.1]} castShadow material={M.paint(C.cathode)}>
-          <boxGeometry args={[1.5, 1.2, 1]} />
-        </mesh>
-      </group>
+      <Pad w={11} d={9} />
+      <mesh position={[-1.2, 0, 0]} castShadow receiveShadow material={M.paint('#c9ced2')}>
+        <sphereGeometry args={[3.8, 36, 18, 0, Math.PI * 2, 0, Math.PI / 2]} />
+      </mesh>
+      {/* open doorway showing salt */}
+      <mesh position={[-1.2, 0.9, 3.3]} material={M.paint('#1a1f23')}>
+        <boxGeometry args={[2.2, 1.8, 1.2]} />
+      </mesh>
+      <mesh position={[-1.2, 0.5, 3.6]} castShadow material={M.paint(C.salt)}>
+        <coneGeometry args={[1, 1, 16]} />
+      </mesh>
+      <mesh position={[2.6, 1.2, 0]} rotation={[0, 0, 0.35]} castShadow material={mat(C.salt, { emissive: C.salt, emissiveIntensity: 0.3 })}>
+        <boxGeometry args={[3.4, 0.25, 0.8]} />
+      </mesh>
+      <Tank position={[4.2, 0, 0]} r={1} h={2.4} />
     </group>
   )
 }
 
-export function SulfateRecovery({ settings }) {
+export function BrinePurification() {
+  return (
+    <group>
+      <Pad w={12} d={8} />
+      <group position={[-3.2, 0, -0.6]}>
+        <mesh position={[0, 0.7, 0]} castShadow receiveShadow material={M.steelDark()}>
+          <cylinderGeometry args={[2.3, 2.3, 1.4, 36, 1, true]} />
+        </mesh>
+        <mesh position={[0, 1.2, 0]} rotation={[-Math.PI / 2, 0, 0]} material={mat(C.brine, { roughness: 0.2, metalness: 0.1 })}>
+          <circleGeometry args={[2.25, 36]} />
+        </mesh>
+        <mesh position={[0, 1.5, 0]} material={M.frame()}>
+          <boxGeometry args={[4.6, 0.12, 0.3]} />
+        </mesh>
+      </group>
+      {[0.8, 2.4].map((x) => (
+        <Tank key={x} position={[x, 0, -1.8]} r={0.7} h={1.8} />
+      ))}
+      {[0.6, 1.6, 2.6, 3.6].map((x, i) => (
+        <mesh key={x} position={[x, 2.2, 1.9]} castShadow material={i % 2 ? M.steel() : M.paint('#dfe6ea')}>
+          <cylinderGeometry args={[0.36, 0.36, 4.4, 18]} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+export function Dechlorination() {
+  return (
+    <group>
+      <Pad w={8} d={6} />
+      <mesh position={[-1.4, 3.2, 0]} castShadow material={M.paint('#dfe6ea')}>
+        <cylinderGeometry args={[0.7, 0.7, 6.4, 20]} />
+      </mesh>
+      <Tank position={[1.4, 0, -0.6]} r={1.1} h={2} color="#9fb9c2" />
+      <mesh position={[1.4, 0.8, 1.9]} castShadow material={M.paint('#3c7ad6')}>
+        <boxGeometry args={[1.2, 1.2, 1]} />
+      </mesh>
+    </group>
+  )
+}
+
+function Transformer(p) {
+  return (
+    <group {...p}>
+      <mesh position={[0, 1.1, 0]} castShadow material={M.paint('#5f6d62')}>
+        <boxGeometry args={[1.8, 2.2, 1.4]} />
+      </mesh>
+      {[-0.5, 0, 0.5].map((x) => (
+        <mesh key={x} position={[x, 2.6, 0]} material={M.paint('#c9b17a')}>
+          <cylinderGeometry args={[0.08, 0.12, 0.8, 8]} />
+        </mesh>
+      ))}
+      {[-1, 1].map((s) => (
+        <mesh key={s} position={[0, 1.1, s * 0.8]} material={M.frame()}>
+          <boxGeometry args={[1.6, 1.8, 0.14]} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+export function Rectifiers() {
   return (
     <group>
       <Pad w={9} d={7} />
-      <Tank position={[-2.4, 1.2, 0]} r={1.1} h={4} cone />
-      <group position={[-2.4, 0, 0]}>
-        <Legs w={1.6} d={1.6} h={1.2} />
-      </group>
-      {settings.sulfateRecovery ? (
-        <mesh position={[1.8, 0.9, 0.5]} castShadow receiveShadow material={M.paint(C.sulfate)}>
-          <coneGeometry args={[2.2, 1.8, 24]} />
-        </mesh>
-      ) : (
-        <mesh position={[1.8, 0.08, 0.5]} rotation={[-Math.PI / 2, 0, 0]} material={M.paint('#6e8a8f')}>
-          <planeGeometry args={[4, 4]} />
-        </mesh>
-      )}
-    </group>
-  )
-}
-
-export function WaterTreatment({ settings }) {
-  const k = settings.waterRecycle / 100
-  return (
-    <group>
-      <Pad w={11} d={7} />
-      {[-2.8, 1.2].map((x) => (
-        <group key={x} position={[x, 0, 0]}>
-          <mesh position={[0, 0.5, 0]} castShadow receiveShadow material={M.steelDark()}>
-            <cylinderGeometry args={[1.8, 1.8, 1, 32, 1, true]} />
-          </mesh>
-          <mesh position={[0, 0.85, 0]} rotation={[-Math.PI / 2, 0, 0]} material={M.paint(C.water)}>
-            <circleGeometry args={[1.75, 32]} />
-          </mesh>
-        </group>
+      {[-2.8, 0, 2.8].map((x) => (
+        <Transformer key={x} position={[x, 0, -1.6]} />
       ))}
-      <Building w={2.8} d={2.4} h={2.4} position={[4.2, 0, 0]} />
-      {/* recycle gauge */}
-      <mesh position={[4.2, 3.6 + k * 0.8, 1.25]} material={M.glow(C.water, 1.5)}>
-        <boxGeometry args={[0.4, k * 1.6, 0.05]} />
+      <Building w={7} d={2.4} h={2.6} position={[0, 0, 1.8]} />
+      <mesh position={[0, 3.3, 1.8]} material={M.glow(C.power, 1.4)}>
+        <boxGeometry args={[6.6, 0.1, 0.1]} />
       </mesh>
     </group>
   )
 }
 
-export { TAU }
+// ---------- the cell room ----------
+
+const PLATES = 28
+
+function MembraneStacks({ positions, odc }) {
+  const plates = useRef()
+  const total = positions.length * PLATES
+  useEffect(() => {
+    if (!plates.current) return
+    const d = new THREE.Object3D()
+    const col = new THREE.Color()
+    let i = 0
+    positions.forEach(([x, z]) => {
+      for (let k = 0; k < PLATES; k++) {
+        d.position.set(x, 1.15, z - 2.9 + (k * 5.8) / (PLATES - 1))
+        d.updateMatrix()
+        plates.current.setMatrixAt(i, d.matrix)
+        plates.current.setColorAt(i, col.set(k % 2 ? '#8e9aa3' : odc ? '#4d6f9a' : '#b1a189'))
+        i++
+      }
+    })
+    plates.current.instanceMatrix.needsUpdate = true
+    if (plates.current.instanceColor) plates.current.instanceColor.needsUpdate = true
+  }, [positions, odc])
+
+  return (
+    <group>
+      <instancedMesh ref={plates} args={[null, null, total]} castShadow>
+        <boxGeometry args={[1.25, 1.5, 0.14]} />
+        <meshStandardMaterial roughness={0.45} metalness={0.5} />
+      </instancedMesh>
+      {positions.map(([x, z], i) => (
+        <group key={i} position={[x, 0, z]}>
+          {/* frame rails and end plates */}
+          <mesh position={[0, 0.3, 0]} castShadow material={M.frame()}>
+            <boxGeometry args={[1.4, 0.3, 6.6]} />
+          </mesh>
+          {[-1, 1].map((s) => (
+            <mesh key={s} position={[0, 1.15, s * 3.2]} castShadow material={M.steelDark()}>
+              <boxGeometry args={[1.5, 1.8, 0.35]} />
+            </mesh>
+          ))}
+          {/* headers: chlorine out (top), brine in */}
+          <mesh position={[0.45, 2.1, 0]} rotation={[Math.PI / 2, 0, 0]} material={M.paint(C.chlorine)}>
+            <cylinderGeometry args={[0.1, 0.1, 6.2, 10]} />
+          </mesh>
+          <mesh position={[-0.45, 2.1, 0]} rotation={[Math.PI / 2, 0, 0]} material={M.paint(odc ? C.oxygen : C.hydrogen)}>
+            <cylinderGeometry args={[0.1, 0.1, 6.2, 10]} />
+          </mesh>
+          {/* busbar */}
+          <mesh position={[0, 0.55, 3.55]} material={M.glow(C.power, 0.9)}>
+            <boxGeometry args={[0.9, 0.12, 0.4]} />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  )
+}
+
+function DiaphragmCells({ positions }) {
+  return positions.map(([x, z], i) => (
+    <group key={i} position={[x, 0, z]}>
+      {[-2, 0, 2].map((dz) => (
+        <group key={dz} position={[0, 0, dz]}>
+          <mesh position={[0, 0.9, 0]} castShadow material={M.paint('#6c7a70')}>
+            <boxGeometry args={[1.4, 1.4, 1.5]} />
+          </mesh>
+          <mesh position={[0, 1.75, 0]} castShadow material={M.paint('#c9ced2')}>
+            <boxGeometry args={[1.2, 0.3, 1.3]} />
+          </mesh>
+          <mesh position={[0.45, 2.1, 0]} material={M.paint(C.chlorine)}>
+            <cylinderGeometry args={[0.1, 0.1, 0.5, 8]} />
+          </mesh>
+        </group>
+      ))}
+      <mesh position={[0.8, 0.5, 0]} material={M.glow('#c97a3d', 0.6)}>
+        <boxGeometry args={[0.12, 0.25, 6]} />
+      </mesh>
+    </group>
+  ))
+}
+
+function MercuryCells({ positions }) {
+  return positions.map(([x, z], i) => (
+    <group key={i} position={[x, 0, z]}>
+      <mesh position={[0, 0.55, 0]} castShadow material={M.steelDark()} rotation={[0.03, 0, 0]}>
+        <boxGeometry args={[1.5, 0.6, 6.4]} />
+      </mesh>
+      <mesh
+        position={[0, 0.87, 0]}
+        rotation={[-Math.PI / 2 + 0.03, 0, 0]}
+        material={mat(C.mercury, { metalness: 1, roughness: 0.08, emissive: C.mercury, emissiveIntensity: 0.25 })}
+      >
+        <planeGeometry args={[1.2, 6.2]} />
+      </mesh>
+      {/* decomposer where amalgam gives up sodium */}
+      <mesh position={[0, 1.3, 3.8]} castShadow material={M.steel()}>
+        <cylinderGeometry args={[0.35, 0.35, 2.4, 14]} />
+      </mesh>
+    </group>
+  ))
+}
+
+export function CellRoom({ cell, stacks }) {
+  const shown = Math.max(1, Math.min(18, stacks))
+  const rows = shown > 9 ? 2 : 1
+  const cols = Math.ceil(shown / rows)
+  const dx = 1.9
+  const positions = useMemo(() => {
+    const p = []
+    for (let i = 0; i < shown; i++) {
+      const r = Math.floor(i / cols)
+      const c = i % cols
+      p.push([(c - (cols - 1) / 2) * dx, rows === 1 ? 0 : (r === 0 ? -4 : 4)])
+    }
+    return p
+  }, [shown, rows, cols])
+  const w = cols * dx + 3
+  const d = rows * 8 + 1.5
+  const odc = cell === 'odc'
+
+  return (
+    <group>
+      <Pad w={w} d={d} />
+      {/* open steel hall so the cells stay visible */}
+      {[-w / 2, w / 2].flatMap((x) =>
+        [-d / 2, 0, d / 2].map((z) => (
+          <mesh key={`${x}${z}`} position={[x, 2.6, z]} castShadow material={M.frame()}>
+            <boxGeometry args={[0.3, 5.2, 0.3]} />
+          </mesh>
+        )),
+      )}
+      {[-d / 2, 0, d / 2].map((z) => (
+        <mesh key={z} position={[0, 5.3, z]} castShadow material={M.frame()}>
+          <boxGeometry args={[w + 0.3, 0.3, 0.3]} />
+        </mesh>
+      ))}
+      {[-w / 2, w / 2].map((x) => (
+        <mesh key={x} position={[x, 5.3, 0]} material={M.frame()}>
+          <boxGeometry args={[0.3, 0.3, d]} />
+        </mesh>
+      ))}
+      {(cell === 'membrane' || odc) && <MembraneStacks positions={positions} odc={odc} />}
+      {cell === 'diaphragm' && <DiaphragmCells positions={positions} />}
+      {cell === 'mercury' && <MercuryCells positions={positions} />}
+    </group>
+  )
+}
+
+export function ChlorineDrying() {
+  return (
+    <group>
+      <Pad w={9} d={7} />
+      <Tank position={[-2.6, 0, 0]} r={0.9} h={4.2} color="#dfe6ea" />
+      {[-0.3, 1.5].map((x) => (
+        <mesh key={x} position={[x, 3.4, -0.4]} castShadow material={M.paint('#d8dde0')}>
+          <cylinderGeometry args={[0.6, 0.6, 6.8, 20]} />
+        </mesh>
+      ))}
+      <Tank position={[3, 0, 1.4]} r={0.7} h={1.6} color="#8c7c5f" />
+    </group>
+  )
+}
+
+export function Liquefaction({ running }) {
+  const car = useRef()
+  useFrame((state) => {
+    if (!car.current) return
+    const t = running ? state.clock.elapsedTime : 0
+    car.current.position.x = -6 + ((t * 1.5) % 26)
+  })
+  return (
+    <group>
+      <Pad w={11} d={9} />
+      <Building w={4} d={3} h={3} position={[-3, 0, -2]} />
+      {[-0.2, 1.8].map((z) => (
+        <group key={z}>
+          <Bullet position={[2.2, 1.3, z]} r={0.8} len={4.2} color="#e7ebee" band={C.chlorine} />
+          <Legs w={3} d={0.8} h={0.6} />
+        </group>
+      ))}
+      {/* rail siding with a moving tank car */}
+      <mesh position={[4, 0.06, 3.9]} material={M.frame()}>
+        <boxGeometry args={[26, 0.1, 1.4]} />
+      </mesh>
+      <group ref={car} position={[0, 0, 3.9]}>
+        <Bullet position={[0, 1.2, 0]} r={0.65} len={3} color="#f0f2f4" band={C.chlorine} />
+        <mesh position={[0, 0.4, 0]} material={M.frame()}>
+          <boxGeometry args={[3.6, 0.3, 1.1]} />
+        </mesh>
+      </group>
+    </group>
+  )
+}
+
+export function CausticEvaporator({ mvr, needed }) {
+  return (
+    <group>
+      <Pad w={9} d={7} />
+      {needed && !mvr && [-2.8, -1.2, 0.4].map((x) => <Tank key={x} position={[x, 1, -0.8]} r={0.65} h={3.6} cone />)}
+      {needed && mvr && (
+        <>
+          <Tank position={[-1.6, 1, -0.8]} r={0.9} h={4} cone />
+          <mesh position={[0.4, 0.8, -1.4]} castShadow material={M.paint('#3c7ad6')}>
+            <boxGeometry args={[1.4, 1.6, 1.4]} />
+          </mesh>
+        </>
+      )}
+      {!needed && (
+        <mesh position={[-1.2, 0.8, -0.8]} rotation={[0, 0, Math.PI / 2]} castShadow material={M.steel()}>
+          <cylinderGeometry args={[0.5, 0.5, 2.6, 16]} />
+        </mesh>
+      )}
+      {[1.8, 3.4].map((x) => (
+        <Tank key={x} position={[x, 0, 1.2]} r={0.75} h={3.2} color="#e7ebee" band={C.caustic} />
+      ))}
+    </group>
+  )
+}
+
+export function GasUnit({ cell, h2Use, running }) {
+  const rotor = useRef()
+  useFrame((_, dt) => {
+    if (rotor.current && running) rotor.current.rotation.y += dt * 2
+  })
+  if (cell === 'odc') {
+    return (
+      <group>
+        <Pad w={9} d={7} />
+        <mesh position={[-2, 4.5, 0]} castShadow material={M.paint('#dfe4e8')}>
+          <boxGeometry args={[2, 9, 2]} />
+        </mesh>
+        <mesh position={[-2, 9.1, 0]} material={M.glow(C.oxygen, 0.8)}>
+          <boxGeometry args={[2.05, 0.2, 2.05]} />
+        </mesh>
+        <Building w={3.4} d={2.6} h={2.4} position={[1.6, 0, -1.2]} />
+        <Tank position={[2, 0, 2]} r={0.7} h={3} color="#e7ebee" band={C.oxygen} />
+      </group>
+    )
+  }
+  return (
+    <group>
+      <Pad w={9} d={7} />
+      {h2Use === 'fuelcell' &&
+        [-2.4, -0.8, 0.8, 2.4].map((x) => (
+          <group key={x} position={[x, 0, -0.6]}>
+            <mesh position={[0, 1.3, 0]} castShadow material={M.paint('#e4e8eb')}>
+              <boxGeometry args={[1.3, 2.6, 4]} />
+            </mesh>
+            <mesh position={[0, 2.62, 0]} material={M.glow(C.hydrogen, 0.7)}>
+              <boxGeometry args={[1.1, 0.06, 3.6]} />
+            </mesh>
+          </group>
+        ))}
+      {h2Use === 'boiler' && (
+        <>
+          <Building w={4.4} d={3.4} h={3.6} position={[-1, 0, -0.4]} />
+          <Stack position={[2.4, 0, -1.2]} h={9} r={0.45} glow={C.heat} />
+        </>
+      )}
+      {h2Use === 'sell' && (
+        <>
+          <group ref={rotor} position={[-2.6, 1.2, -1.4]}>
+            <mesh castShadow material={M.paint('#3c7ad6')}>
+              <boxGeometry args={[1.4, 1.4, 1.4]} />
+            </mesh>
+          </group>
+          {[-0.4, 1.8].map((z) => (
+            <group key={z} position={[1.2, 0, z]}>
+              {[-0.35, 0.35].map((y) => (
+                <Bullet key={y} position={[0, 1.4 + y, 0]} r={0.3} len={4.6} color={C.hydrogen} />
+              ))}
+              <mesh position={[0, 0.5, 0]} material={M.frame()}>
+                <boxGeometry args={[5, 0.3, 1]} />
+              </mesh>
+            </group>
+          ))}
+        </>
+      )}
+      {h2Use === 'vent' && <Stack position={[0, 0, 0]} h={14} r={0.35} glow={C.hydrogen} />}
+    </group>
+  )
+}
+
+export function WaterTreatment() {
+  return (
+    <group>
+      <Pad w={10} d={6} />
+      <Building w={4.2} d={3} h={3} position={[-2.4, 0, 0]} />
+      {[1.4, 2.8].map((x) => (
+        <Tank key={x} position={[x, 0, -0.8]} r={0.6} h={2.8} color="#dfe6ea" />
+      ))}
+      <mesh position={[2.1, 0.6, 1.8]} castShadow material={M.paint(C.water)}>
+        <boxGeometry args={[3, 1.2, 1.2]} />
+      </mesh>
+    </group>
+  )
+}

@@ -1,5 +1,5 @@
 import { Suspense, lazy, useMemo, useState } from 'react'
-import { CONVENTIONAL, DEFAULTS, runModel } from './model/plant.js'
+import { DEFAULTS, PRESETS, PRESET_KEYS, runModel } from './model/plant.js'
 import Controls from './ui/Controls.jsx'
 import Results from './ui/Results.jsx'
 import UnitCard from './ui/UnitCard.jsx'
@@ -7,16 +7,15 @@ import { C } from './scene/colors.js'
 
 const PlantScene = lazy(() => import('./scene/PlantScene.jsx'))
 
-const DESIGN_KEYS = ['energy', 'electricKiln', 'heatRecovery', 'waterRecycle', 'liRecovery', 'sulfateRecovery']
-const matches = (s, p) => DESIGN_KEYS.every((k) => s[k] === p[k])
+const matches = (s, p) => PRESET_KEYS.every((k) => s[k] === p[k])
 
 const LEGEND = [
-  ['Ore', C.ore],
-  ['Lithium', C.lithium],
-  ['Metal salts', C.nickel],
-  ['Precursor', C.precursor],
-  ['Cathode', C.cathode],
-  ['Sodium sulfate', C.sulfate],
+  ['Salt', C.salt],
+  ['Brine', C.brine],
+  ['Chlorine', C.chlorine],
+  ['Caustic soda', C.caustic],
+  ['Hydrogen', C.hydrogen],
+  ['Oxygen', C.oxygen],
   ['Water', C.water],
   ['Power', C.power],
 ]
@@ -31,13 +30,8 @@ export default function App() {
   const [running, setRunning] = useState(!reduceMotion)
   const r = useMemo(() => runModel(s), [s])
 
-  const preset = matches(s, DEFAULTS) ? 'efficient' : matches(s, CONVENTIONAL) ? 'conventional' : null
-  const applyPreset = (p) => {
-    const base = p === 'efficient' ? DEFAULTS : CONVENTIONAL
-    const next = { ...s }
-    DESIGN_KEYS.forEach((k) => (next[k] = base[k]))
-    setS(next)
-  }
+  const preset = Object.keys(PRESETS).find((k) => matches(s, PRESETS[k])) ?? null
+  const applyPreset = (p) => setS({ ...s, ...PRESETS[p] })
 
   return (
     <div className="app">
@@ -49,8 +43,8 @@ export default function App() {
             <span />
           </span>
           <div>
-            <h1>Ezra Cathode Works</h1>
-            <p>Lithium ore in, EV battery cathode out. An integrated NMC811 plant you can tune.</p>
+            <h1>Ezra Chlorine Works</h1>
+            <p>Salt, water and power in. Chlorine, caustic soda and hydrogen out. A chlor-alkali plant you can tune.</p>
           </div>
         </div>
         <div className="view-toggles">
@@ -96,7 +90,7 @@ export default function App() {
         <h2 className="panel-title">Projected outcomes</h2>
         <Results r={r} />
         <p className="disclaimer">
-          Indicative model built from reaction stoichiometry and typical published energy and price ranges. Use it to compare
+          Indicative model built from electrochemistry, reaction stoichiometry and typical published energy and price ranges. Use it to compare
           options, not to make investment decisions.
         </p>
       </aside>

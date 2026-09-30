@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { CONVENTIONAL, energyGJ, runModel } from '../model/plant.js'
+import { DEFAULTS, PRESETS, runModel } from '../model/plant.js'
 import CashChart from './CashChart.jsx'
 import { compact, money, num, pct } from './format.js'
 
 const TABS = [
   ['in', 'Inputs'],
   ['out', 'Outputs'],
+  ['energy', 'Energy'],
   ['money', 'Projection'],
   ['compare', 'Compare'],
 ]
@@ -32,7 +33,7 @@ function Inputs({ r }) {
         <thead>
           <tr>
             <th>Resource</th>
-            <th className="num">Per t cathode</th>
+            <th className="num">Per t Cl₂</th>
             <th className="num">Per year</th>
             <th className="num">Cost / yr</th>
           </tr>
@@ -53,7 +54,7 @@ function Inputs({ r }) {
                   <td className="num mono">
                     {compact(i.perYear)} <span className="unit">{i.unit}</span>
                   </td>
-                  <td className="num mono">{money(i.costYear)}</td>
+                  <td className="num mono">{i.price ? money(i.costYear) : '–'}</td>
                 </tr>
               ))}
           </tbody>
@@ -77,7 +78,7 @@ function Outputs({ r }) {
           <thead>
             <tr>
               <th>Stream</th>
-              <th className="num">Per t cathode</th>
+              <th className="num">Per t Cl₂</th>
               <th className="num">Per year</th>
             </tr>
           </thead>
@@ -85,7 +86,7 @@ function Outputs({ r }) {
             {r.outputs.map((o) => (
               <tr key={o.id}>
                 <td>
-                  <span className={`chip chip-${o.kind}`}>{o.kind === 'byproduct' ? 'by-product' : o.kind}</span> {o.label}
+                  <span className={`chip chip-${o.kind}`}>{o.kind === 'byproduct' ? 'used' : o.kind}</span> {o.label}
                 </td>
                 <td className="num mono">
                   {num(o.perT)} <span className="unit">{o.unit}</span>
@@ -99,8 +100,49 @@ function Outputs({ r }) {
         </table>
       </div>
       <p className="note">
-        {compact(r.production)} t of cathode makes about {num(r.gwh, 1)} GWh of battery cells. That covers roughly{' '}
-        {compact(r.evs)} cars with a {r.settings.packKwh} kWh pack each year.
+        Chlorine and caustic always come together: every tonne of chlorine brings {num(r.naoh, 2)} t of caustic soda. A year's chlorine could go into about{' '}
+        {compact(r.pvc)} t of PVC, the plastic in pipes and window frames, which is where a third of the world's chlorine ends up.
+      </p>
+    </div>
+  )
+}
+
+function Energy({ r }) {
+  const rows = [
+    ['Cell reaction (DC)', r.dcKWh, 'cells'],
+    ['Rectifier losses', r.acKWh - r.dcKWh, 'loss'],
+    ['Chlorine drying + liquefaction', r.aux.chlorine, 'aux'],
+    ['Brine system', r.aux.brine, 'aux'],
+    ['Caustic handling', r.aux.caustic, 'aux'],
+    ...(r.aux.oxygen ? [['Oxygen plant', r.aux.oxygen, 'aux']] : []),
+    ...(r.aux.hydrogen ? [['Hydrogen handling', r.aux.hydrogen, 'aux']] : []),
+    ['Utilities', r.aux.utilities, 'aux'],
+    ...(r.fuelCellKWh ? [['Fuel cell returns', -r.fuelCellKWh, 'credit']] : []),
+  ]
+  const max = Math.max(...rows.map((x) => Math.abs(x[1])))
+  return (
+    <div className="stack">
+      <div className="energy-total">
+        <span className="mono">{num(r.netKWh / 1000, 2)}</span>
+        <span>MWh of electricity per tonne of chlorine</span>
+      </div>
+      <ul className="ebars">
+        {rows.map(([label, v, kind]) => (
+          <li key={label}>
+            <span className="eb-label">{label}</span>
+            <span className="bar">
+              <span className={`fill e-${kind}`} style={{ width: `${(Math.abs(v) / max) * 100}%` }} />
+            </span>
+            <span className="mono eb-val">
+              {v < 0 ? '−' : ''}
+              {num(Math.abs(v), 0)} <span className="unit">kWh</span>
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="note">
+        The cells run at {r.voltage.toFixed(2)} V and {r.settings.j} kA/m², drawing {compact(r.currentKA)} kA across {compact(r.areaM2)} m² of cell area.
+        {r.steamT > 0 && ` The evaporator also needs ${num(r.steamT, 2)} t of steam per tonne${r.gasGJ > 0 ? `, ${num(r.gasGJ, 1)} GJ of it from natural gas` : ', all raised by burning the plant’s own hydrogen'}.`}
       </p>
     </div>
   )
@@ -120,50 +162,63 @@ function Money({ r }) {
         <div><dt>NPV at 8%</dt><dd className={`mono ${e.npv < 0 ? 'neg' : 'pos'}`}>{money(e.npv)}</dd></div>
       </dl>
       <p className="note">
-        Two build years, then a ramp-up at 40% and 75% before full output. Profit is before tax and depreciation. Staff
-        about {num(r.staff)}.
+        Cells are {pct(e.capexParts.cells / e.capex)} of the build cost. Revenue is {pct(e.revenueParts.naoh / e.revenue)} caustic soda,{' '}
+        {pct(e.revenueParts.cl2 / e.revenue)} chlorine{e.revenueParts.h2 ? ` and ${pct(e.revenueParts.h2 / e.revenue)} hydrogen` : ''}. Two build years,
+        then 60% and 90% output before full rate. Profit is before tax.
       </p>
     </div>
   )
 }
 
 function Compare({ r }) {
-  const c = runModel({ ...CONVENTIONAL, capacity: r.settings.capacity, utilization: r.settings.utilization, camPrice: r.settings.camPrice, spodumenePrice: r.settings.spodumenePrice, nickelPrice: r.settings.nickelPrice, packKwh: r.settings.packKwh })
+  const keep = ['capacity', 'utilization', 'cl2Price', 'naohPrice', 'h2Price', 'saltPrice']
+  const base = Object.fromEntries(keep.map((k) => [k, r.settings[k]]))
+  const conv = runModel({ ...DEFAULTS, ...base, ...PRESETS.conventional })
+  const leg = runModel({ ...DEFAULTS, ...base, ...PRESETS.legacy })
   const cost = (x) => (x.econ.variable + x.econ.fixed) / x.production
   const rows = [
-    ['Energy', energyGJ(r), energyGJ(c), 'GJ/t'],
-    ['CO₂', r.co2, c.co2, 't/t'],
-    ['Fresh water', r.freshWater, c.freshWater, 'm³/t'],
-    ['Ore needed', r.perT.spodumene, c.perT.spodumene, 't/t'],
-    ['Operating cost', cost(r), cost(c), '$/t'],
+    ['Electricity', (x) => x.netKWh / 1000, 'MWh/t'],
+    ['CO₂', (x) => x.co2, 't/t'],
+    ['Operating cost', cost, '$/t'],
+    ['Build cost', (x) => x.econ.capex, '$'],
   ]
+  const plants = [
+    ['This plant', r, 'this'],
+    ['Conventional', conv, 'conv'],
+    ['Legacy mercury', leg, 'leg'],
+  ]
+  const fmt = (v, u) => (u === '$' || u === '$/t' ? money(v) : num(v, 2))
   return (
     <div className="stack">
-      <p className="note">This plant against a conventional one of the same size: gas kiln, grid power, no heat recovery, 60% water reuse, 82% lithium recovery.</p>
+      <p className="note">
+        Same size and prices. Conventional is a standard membrane plant on grid power that burns its hydrogen for steam. Legacy is a mercury-cell plant.
+      </p>
       <ul className="compare">
-        {rows.map(([label, a, b, u]) => {
-          const d = (a - b) / b
-          const max = Math.max(a, b)
+        {rows.map(([label, fn, u]) => {
+          const vals = plants.map(([, x]) => fn(x))
+          const max = Math.max(...vals)
+          const d = (vals[0] - vals[1]) / vals[1]
           return (
             <li key={label}>
               <div className="cmp-head">
                 <span>{label}</span>
                 <span className={`mono delta ${d <= 0 ? 'good' : 'bad'}`}>
                   {d <= 0 ? '−' : '+'}
-                  {Math.abs(d * 100).toFixed(0)}%
+                  {Math.abs(d * 100).toFixed(0)}% vs conventional
                 </span>
               </div>
               <div className="cmp-bars">
-                <div className="cmp-row">
-                  <span className="cmp-name">This plant</span>
-                  <span className="bar"><span className="fill this" style={{ width: `${(a / max) * 100}%` }} /></span>
-                  <span className="mono cmp-val">{u === '$/t' ? money(a) : num(a)} <span className="unit">{u === '$/t' ? '/t' : u}</span></span>
-                </div>
-                <div className="cmp-row">
-                  <span className="cmp-name">Conventional</span>
-                  <span className="bar"><span className="fill conv" style={{ width: `${(b / max) * 100}%` }} /></span>
-                  <span className="mono cmp-val">{u === '$/t' ? money(b) : num(b)} <span className="unit">{u === '$/t' ? '/t' : u}</span></span>
-                </div>
+                {plants.map(([name, , cls], i) => (
+                  <div className="cmp-row" key={name}>
+                    <span className="cmp-name">{name}</span>
+                    <span className="bar">
+                      <span className={`fill ${cls}`} style={{ width: `${(vals[i] / max) * 100}%` }} />
+                    </span>
+                    <span className="mono cmp-val">
+                      {fmt(vals[i], u)} <span className="unit">{u === '$' ? '' : u === '$/t' ? '/t' : u}</span>
+                    </span>
+                  </div>
+                ))}
               </div>
             </li>
           )
@@ -175,13 +230,19 @@ function Compare({ r }) {
 
 export default function Results({ r }) {
   const [tab, setTab] = useState('in')
+  const mwh = r.netKWh / 1000
   return (
     <div className="results">
+      {r.cell.mercury && (
+        <p className="alert" role="status">
+          Mercury cells release about {num(r.mercuryG, 1)} g of mercury per tonne of chlorine. New mercury plants are banned in the EU and under the Minamata Convention.
+        </p>
+      )}
       <div className="kpis">
-        <Kpi label="Cathode / yr" value={compact(r.production)} unit=" t" sub={`${num(r.gwh, 1)} GWh of cells`} />
-        <Kpi label="EVs supplied / yr" value={compact(r.evs)} sub={`${r.settings.packKwh} kWh packs`} tone="accent" />
-        <Kpi label="CO₂ per t" value={num(r.co2, 2)} unit=" t" sub={`${compact(r.co2 * r.production)} t / yr`} tone={r.co2 < 1.2 ? 'good' : r.co2 < 2.5 ? 'warn' : 'bad'} />
-        <Kpi label="Payback" value={r.econ.paybackYear ? `Yr ${r.econ.paybackYear}` : '> 15 yrs'} sub={`${money(r.econ.ebitda)} profit / yr`} tone={r.econ.ebitda > 0 ? undefined : 'bad'} />
+        <Kpi label="Chlorine / yr" value={compact(r.production)} unit=" t" sub={`+ ${compact(r.naoh * r.production)} t caustic soda`} />
+        <Kpi label="Power per t Cl₂" value={num(mwh, 2)} unit=" MWh" sub={`${r.voltage.toFixed(2)} V per cell`} tone={mwh < 2.1 ? 'good' : mwh < 2.7 ? 'warn' : 'bad'} />
+        <Kpi label="CO₂ per t" value={num(r.co2, 2)} unit=" t" sub={`${compact(r.co2 * r.production)} t / yr`} tone={r.co2 < 0.5 ? 'good' : r.co2 < 1.3 ? 'warn' : 'bad'} />
+        <Kpi label="Payback" value={r.econ.paybackYear ? `Yr ${r.econ.paybackYear}` : '> 15 yrs'} sub={`${money(r.econ.ebitda)} profit / yr`} tone={r.econ.ebitda > 0 ? 'accent' : 'bad'} />
       </div>
       <div className="tabs" role="tablist">
         {TABS.map(([k, label]) => (
@@ -193,6 +254,7 @@ export default function Results({ r }) {
       <div className="tab-body" role="tabpanel" aria-labelledby={`tab-${tab}`}>
         {tab === 'in' && <Inputs r={r} />}
         {tab === 'out' && <Outputs r={r} />}
+        {tab === 'energy' && <Energy r={r} />}
         {tab === 'money' && <Money r={r} />}
         {tab === 'compare' && <Compare r={r} />}
       </div>

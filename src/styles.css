@@ -67,11 +67,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   text-transform: uppercase;
 }
 .brand p { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
-/* layered-oxide mark: three stacked slabs, like the cathode's crystal layers */
+/* mark: the three products, chlorine, caustic and hydrogen */
 .mark { display: grid; gap: 3px; width: 26px; flex: none; }
 .mark span { height: 5px; border-radius: 1px; background: var(--accent); }
-.mark span:nth-child(2) { background: var(--power); margin-left: 5px; }
-.mark span:nth-child(3) { background: #79e0d4; }
+.mark span:nth-child(1) { background: #b9e04a; }
+.mark span:nth-child(2) { background: #b48cff; margin-left: 5px; }
+.mark span:nth-child(3) { background: #ff7eb6; }
 
 .view-toggles { display: flex; gap: 6px; flex: none; }
 .view-toggles button, .presets button, .seg button, .tabs button {
@@ -109,7 +110,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 
 /* ---------- controls ---------- */
 .controls { display: grid; gap: 18px; }
-.presets { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.presets button { padding-inline: 6px; font-size: 13px; }
 .group { display: grid; gap: 14px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
 .group h3 {
   margin: 0;
@@ -158,6 +160,7 @@ input[type='range']::-moz-range-thumb {
 
 .seg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .seg button { font-size: 12.5px; padding: 7px 8px; text-align: left; }
+.seg button:disabled { opacity: 0.35; cursor: not-allowed; }
 
 .toggle { display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .toggle input { position: absolute; opacity: 0; pointer-events: none; }
@@ -325,6 +328,7 @@ input[type='range']::-moz-range-thumb {
   padding: 8px 8px;
   font-size: 13px;
   margin-bottom: -1px;
+  transition: none;
 }
 .tabs button.is-on { color: var(--fg); border-bottom-color: var(--accent); }
 
@@ -393,6 +397,29 @@ tfoot th, tfoot td { border-bottom: none; padding-top: 10px; font-weight: 600; }
 .fill { display: block; height: 100%; border-radius: 2px; transition: width 0.3s; }
 .fill.this { background: var(--accent); }
 .fill.conv { background: #56636e; }
+.fill.leg { background: #7d5a55; }
+.cmp-row { grid-template-columns: 96px 1fr 88px; }
+
+.alert {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--r);
+  border: 1px solid rgba(239, 106, 90, 0.45);
+  background: rgba(239, 106, 90, 0.1);
+  color: #f3b1a8;
+  font-size: 12.5px;
+}
+
+.energy-total { display: flex; align-items: baseline; gap: 10px; }
+.energy-total .mono { font-size: 30px; color: var(--fg); }
+.energy-total span:last-child { color: var(--muted); font-size: 13px; }
+.ebars { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.ebars li { display: grid; grid-template-columns: 150px 1fr 76px; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.eb-val { text-align: right; color: var(--fg); white-space: nowrap; }
+.fill.e-cells { background: var(--power); }
+.fill.e-loss { background: #8a6d3b; }
+.fill.e-aux { background: #5d7489; }
+.fill.e-credit { background: var(--good); }
 .cmp-val { text-align: right; white-space: nowrap; color: var(--fg); }
 
 .disclaimer { margin: 18px 0 0; font-size: 11.5px; color: var(--faint); line-height: 1.45; }
@@ -406,6 +433,7 @@ tfoot th, tfoot td { border-bottom: none; padding-top: 10px; font-weight: 600; }
   .kpis { grid-template-columns: repeat(4, 1fr); }
 }
 @media (max-width: 760px) {
+  .ebars li { grid-template-columns: 118px 1fr 70px; }
   .app { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'top' 'stage' 'right' 'left'; }
   .stage { height: 62vh; }
   .panel-left { max-height: none; border-right: none; border-top: 1px solid var(--line); }

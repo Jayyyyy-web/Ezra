@@ -1,4 +1,4 @@
-import { ENERGY_SOURCES } from '../model/plant.js'
+import { CELLS, ENERGY_SOURCES, H2_USES, cellVoltage } from '../model/plant.js'
 
 function Slider({ id, label, value, min, max, step, unit, onChange, hint, fmt }) {
   return (
@@ -40,8 +40,37 @@ function Toggle({ id, label, checked, onChange, hint }) {
   )
 }
 
+function Choice({ id, label, value, options, onChange, hint, cols = 2 }) {
+  return (
+    <div className="field">
+      <span className="field-label" id={`${id}-label`}>
+        {label}
+      </span>
+      <div className="seg" role="radiogroup" aria-labelledby={`${id}-label`} style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
+        {options.map(([k, text, disabled]) => (
+          <button
+            key={k}
+            type="button"
+            role="radio"
+            aria-checked={value === k}
+            disabled={disabled}
+            className={value === k ? 'is-on' : ''}
+            onClick={() => onChange(k)}
+          >
+            {text}
+          </button>
+        ))}
+      </div>
+      {hint && <p className="hint">{hint}</p>}
+    </div>
+  )
+}
+
 export default function Controls({ s, set, onPreset, preset }) {
   const upd = (k) => (v) => set({ ...s, [k]: v })
+  const cell = CELLS[s.cell]
+  const setCell = (k) => set({ ...s, cell: k, j: CELLS[k].j[2] })
+
   return (
     <div className="controls">
       <div className="presets" role="group" aria-label="Plant design">
@@ -51,46 +80,74 @@ export default function Controls({ s, set, onPreset, preset }) {
         <button type="button" className={preset === 'conventional' ? 'is-on' : ''} onClick={() => onPreset('conventional')}>
           Conventional
         </button>
+        <button type="button" className={preset === 'legacy' ? 'is-on' : ''} onClick={() => onPreset('legacy')}>
+          Legacy
+        </button>
       </div>
 
       <section className="group">
+        <h3>Cells</h3>
+        <Choice
+          id="cell"
+          label="Cell technology"
+          value={s.cell}
+          onChange={setCell}
+          options={Object.entries(CELLS).map(([k, v]) => [k, v.short])}
+          hint={cell.note}
+        />
+        <Slider
+          id="j"
+          label="Current density"
+          value={s.j}
+          min={cell.j[0]}
+          max={cell.j[1]}
+          step={0.1}
+          unit="kA/m²"
+          fmt={(v) => v.toFixed(1)}
+          onChange={upd('j')}
+          hint={`${cellVoltage(s.cell, s.j).toFixed(2)} V per cell. Higher current needs fewer cells but more power per tonne.`}
+        />
+      </section>
+
+      <section className="group">
         <h3>Scale</h3>
-        <Slider id="capacity" label="Nameplate capacity" value={s.capacity} min={5000} max={60000} step={2500} unit="t/yr" onChange={upd('capacity')} hint="Cathode the plant is built to make. Reactor trains and kiln lines grow with it." />
-        <Slider id="utilization" label="Utilisation" value={s.utilization} min={50} max={95} step={1} unit="%" onChange={upd('utilization')} />
-        <Slider id="packKwh" label="EV battery size" value={s.packKwh} min={40} max={110} step={5} unit="kWh" onChange={upd('packKwh')} />
+        <Slider id="capacity" label="Nameplate capacity" value={s.capacity} min={50000} max={500000} step={10000} unit="t Cl₂/yr" onChange={upd('capacity')} />
+        <Slider id="utilization" label="Utilisation" value={s.utilization} min={50} max={98} step={1} unit="%" onChange={upd('utilization')} />
       </section>
 
       <section className="group">
         <h3>Energy</h3>
-        <div className="field">
-          <span className="field-label" id="energy-label">Power source</span>
-          <div className="seg" role="radiogroup" aria-labelledby="energy-label">
-            {Object.entries(ENERGY_SOURCES).map(([k, v]) => (
-              <button key={k} type="button" role="radio" aria-checked={s.energy === k} className={s.energy === k ? 'is-on' : ''} onClick={() => upd('energy')(k)}>
-                {v.label}
-              </button>
-            ))}
-          </div>
-          <p className="hint">
-            ${ENERGY_SOURCES[s.energy].price}/MWh · {ENERGY_SOURCES[s.energy].co2} t CO₂/MWh
-          </p>
-        </div>
-        <Toggle id="electricKiln" label="Electric kiln" checked={s.electricKiln} onChange={upd('electricKiln')} hint="Replaces the gas burner on the ore kiln." />
-        <Toggle id="heatRecovery" label="Heat recovery" checked={s.heatRecovery} onChange={upd('heatRecovery')} hint="Vapour recompression and kiln off-gas reuse. About 20% less energy on hot steps." />
-      </section>
-
-      <section className="group">
-        <h3>Process</h3>
-        <Slider id="liRecovery" label="Lithium recovery" value={s.liRecovery} min={78} max={93} step={1} unit="%" onChange={upd('liRecovery')} hint="Share of lithium in the ore that ends up in cathode." />
-        <Slider id="waterRecycle" label="Water recycled" value={s.waterRecycle} min={40} max={95} step={1} unit="%" onChange={upd('waterRecycle')} />
-        <Toggle id="sulfateRecovery" label="Sell sodium sulfate" checked={s.sulfateRecovery} onChange={upd('sulfateRecovery')} hint="Crystallise the main by-product and sell it instead of treating it as brine." />
+        <Choice
+          id="energy"
+          label="Power source"
+          value={s.energy}
+          onChange={upd('energy')}
+          options={Object.entries(ENERGY_SOURCES).map(([k, v]) => [k, v.label])}
+          hint={`$${ENERGY_SOURCES[s.energy].price}/MWh · ${ENERGY_SOURCES[s.energy].co2} t CO₂/MWh`}
+        />
+        <Choice
+          id="h2Use"
+          label="Hydrogen use"
+          value={cell.h2 ? s.h2Use : null}
+          onChange={upd('h2Use')}
+          options={Object.entries(H2_USES).map(([k, v]) => [k, v.label, !cell.h2])}
+          hint={cell.h2 ? H2_USES[s.h2Use].note : 'Oxygen-cathode cells make no hydrogen.'}
+        />
+        <Toggle
+          id="mvr"
+          label="MVR evaporator"
+          checked={s.mvr}
+          onChange={upd('mvr')}
+          hint="Mechanical vapour recompression concentrates caustic with electricity instead of steam."
+        />
       </section>
 
       <section className="group">
         <h3>Market</h3>
-        <Slider id="camPrice" label="Cathode price" value={s.camPrice} min={12} max={40} step={0.5} unit="$/kg" onChange={upd('camPrice')} fmt={(v) => v.toFixed(1)} />
-        <Slider id="spodumenePrice" label="Spodumene price" value={s.spodumenePrice} min={500} max={4000} step={50} unit="$/t" onChange={upd('spodumenePrice')} />
-        <Slider id="nickelPrice" label="Nickel sulfate price" value={s.nickelPrice} min={2500} max={6000} step={50} unit="$/t" onChange={upd('nickelPrice')} />
+        <Slider id="cl2Price" label="Chlorine price" value={s.cl2Price} min={0} max={600} step={10} unit="$/t" onChange={upd('cl2Price')} />
+        <Slider id="naohPrice" label="Caustic soda price" value={s.naohPrice} min={200} max={900} step={10} unit="$/t" onChange={upd('naohPrice')} hint="Priced as 100% NaOH." />
+        <Slider id="h2Price" label="Hydrogen price" value={s.h2Price} min={1} max={8} step={0.1} unit="$/kg" fmt={(v) => v.toFixed(1)} onChange={upd('h2Price')} />
+        <Slider id="saltPrice" label="Salt price" value={s.saltPrice} min={20} max={120} step={1} unit="$/t" onChange={upd('saltPrice')} />
       </section>
     </div>
   )
