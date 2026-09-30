@@ -1,0 +1,23 @@
+// Colour palette for the 3D site (no three.js import, so the UI can use it cheaply).
+export const C = {
+  ground: '#222a30',
+  pad: '#252c32',
+  road: '#15191d',
+  steel: '#a9b2ba',
+  steelDark: '#58626b',
+  frame: '#3a434b',
+  roof: '#2f3a44',
+  wall: '#6d7a85',
+  ore: '#c7ad84',
+  lithium: '#79e0d4',
+  heat: '#ff8a3d',
+  nickel: '#5fbf6a',
+  cobalt: '#d6588a',
+  manganese: '#cbb89b',
+  precursor: '#8a9a4a',
+  cathode: '#4c74ff',
+  sulfate: '#e9eef2',
+  water: '#3d8fd6',
+  power: '#ffd24a',
+  select: '#ffd24a',
+}
