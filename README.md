@@ -39,7 +39,14 @@ Click any unit in the 3D view to see its conditions and live in/out flows.
 
 Material flows come from reaction stoichiometry: LiNi₀.₈Mn₀.₁Co₀.₁O₂ at 97.3 g/mol, 3% lithium excess, and SC6 ore at 6% Li₂O. Energy use, prices and build cost are typical published ranges. The model lives in `src/model/plant.js` and is meant for comparing options, not for investment decisions.
 
-## Run it
+## Run it in VS Code
+
+1. Install [Node.js](https://nodejs.org) (version 20 or newer).
+2. Clone the repo and open the folder in VS Code.
+3. Run `npm install` once in the terminal (or **Terminal → Run Task → Install dependencies**).
+4. Press **F5** and pick **Launch site (Chrome)** or **Launch site (Edge)**. The dev server starts and the site opens at http://localhost:5173. Saved edits reload automatically.
+
+## Run it from a terminal
 
 ```bash
 npm install
